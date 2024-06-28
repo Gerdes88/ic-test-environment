@@ -1,6 +1,6 @@
 # IC Test Environment
 
-Dette repository indeholder kode og dokumentation for det automatiserede IC test miljø udviklet af GN Hearing's IC team.
+Dette repository indeholder kode og dokumentation for det automatiserede IC test miljø udviklet af Gerdes88.
 
 ## Projektbeskrivelse
 
