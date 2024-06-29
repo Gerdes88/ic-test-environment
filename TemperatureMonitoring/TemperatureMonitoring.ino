@@ -1,60 +1,113 @@
-/*
- * ESP8266 wifi module Interfacing with Arduino Uno
- * http://www.electronicwings.com
- */ 
- 
-#include "ESP8266_AT.h"
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <SoftwareSerial.h>
 
-/* Select Demo */
-//#define RECEIVE_DEMO			/* Define RECEIVE demo */
-#define SEND_DEMO				/* Define SEND demo */
+#define ONE_WIRE_BUS 13
+#define ESP8266_RX 2
+#define ESP8266_TX 3
 
-/* Define Required fields shown below */
-#define DOMAIN          "api.thingspeak.com"
-#define PORT            "80"
-#define API_WRITE_KEY   "Write your Write Key here"
-#define CHANNEL_ID      "Write your Channel ID here"
-
-#define SSID            "Write your WIFI SSID here"
-#define PASSWORD        "Write your WIFI Password here"
-
-char _buffer[150];
-uint8_t Connect_Status;
-#ifdef SEND_DEMO
-uint8_t Sample = 0;
-#endif
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+SoftwareSerial esp8266(ESP8266_RX, ESP8266_TX); // RX, TX
 
 void setup() {
-    Serial.begin(115200);
- 
-    while(!ESP8266_Begin());
-    ESP8266_WIFIMode(BOTH_STATION_AND_ACCESPOINT);	/* 3 = Both (AP and STA) */
-    ESP8266_ConnectionMode(SINGLE);     			/* 0 = Single; 1 = Multi */
-    ESP8266_ApplicationMode(NORMAL);    			/* 0 = Normal Mode; 1 = Transperant Mode */
-    if(ESP8266_connected() == ESP8266_NOT_CONNECTED_TO_AP)/*Check WIFI connection*/
-    ESP8266_JoinAccessPoint(SSID, PASSWORD);		/*Connect to WIFI*/
-    ESP8266_Start(0, DOMAIN, PORT);	
+  esp8266.begin(9600);  // Start seriel kommunikation med computeren
+  esp8266.begin(9600);    // Start seriel kommunikation med ESP8266 (ændret til 9600)
+  sensors.begin();        // Start Dallas Temperature sensor
+
+  Serial.println("ESP8266 AT Kommando Test og Temperatur Måling");
+
+  // Initialiser ESP8266
+  initESP8266();
 }
 
 void loop() {
-    Connect_Status = ESP8266_connected();
-    if(Connect_Status == ESP8266_NOT_CONNECTED_TO_AP)	/*Again check connection to WIFI*/
-    ESP8266_JoinAccessPoint(SSID, PASSWORD);			/*Connect to WIFI*/
-    if(Connect_Status == ESP8266_TRANSMISSION_DISCONNECTED)
-    ESP8266_Start(0, DOMAIN, PORT);						/*Connect to TCP port*/
+  // Temperatur måling
+  sensors.requestTemperatures();
+  float temperatureC = sensors.getTempCByIndex(0);
 
-    #ifdef SEND_DEMO
-    memset(_buffer, 0, 150);
-    sprintf(_buffer, "GET /update?api_key=%s&field1=%d", API_WRITE_KEY, Sample++); 	/*connect to thingspeak server to post data using your API_WRITE_KEY*/
-    ESP8266_Send(_buffer);
-    delay(15000); 										/* Thingspeak server delay */
-    #endif
-    
-    #ifdef RECEIVE_DEMO
-    memset(_buffer, 0, 150);
-    sprintf(_buffer, "GET /channels/%s/feeds/last.txt", CHANNEL_ID); /*Connect to thingspeak server to get data using your channel ID*/
-    ESP8266_Send(_buffer);
-    Read_Data(_buffer);
-    delay(600);
-    #endif
+  if (temperatureC == DEVICE_DISCONNECTED_C) {
+    Serial.println("Fejl: Kunne ikke læse temperaturdata");
+    delay(1000);
+    return;
   }
+
+  float temperatureF = sensors.toFahrenheit(temperatureC);
+
+  Serial.print("Temperatur: ");
+  Serial.print(temperatureC);
+  Serial.print(" C eller ");
+  Serial.print(temperatureF);
+  Serial.println(" F");
+
+  // Send temperatur data til ESP8266
+  sendTemperatureData(temperatureC);
+
+  // Håndter ESP8266 kommunikation
+  handleESP8266Communication();
+
+  delay(2000);  // Vent 2 sekunder før næste måling
+}
+
+void initESP8266() {
+  if (!sendCommandWithCheck("AT", "OK")) {
+    Serial.println("ESP8266 ikke fundet. Kontroller forbindelser og baud rate.");
+    while(1);  // Stop programmet hvis ESP8266 ikke svarer
+  }
+  //delay(5000);
+  sendCommand("AT");
+  sendCommand("AT+RST");
+  delay(1000);
+  sendCommand("AT+CWMODE=1");  // Sæt ESP8266 i station mode
+  sendCommand("AT+CWJAP=\"Martins24\",\"12345678\"");  // Forbind til WiFi
+  delay(5000);  // Vent på WiFi forbindelse
+  sendCommand("AT+CIFSR");  // Få IP-adresse
+  sendCommand("AT+CIPMUX=1");  // Konfigurer for multiple forbindelser
+  sendCommand("AT+CIPSERVER=1,80");  // Start server på port 80
+  if (!sendCommandWithCheck("AT+CWJAP=\"Martins24\",\"12345678\"", "OK")) {
+    Serial.println("Kunne ikke forbinde til WiFi. Kontroller SSID og password.");
+    while(1);
+  }
+  Serial.println("Forbundet til WiFi");
+}
+
+bool sendCommandWithCheck(String command, String expectedResponse) {
+  sendCommand(command);
+  return esp8266.find(expectedResponse.c_str());
+}
+
+void sendTemperatureData(float temperature) {
+  String data = String(temperature, 2);  // Konverter float til string med 2 decimaler
+  String command = "AT+CIPSEND=0," + String(data.length()) + "\r\n";
+  sendCommand(command);
+  delay(100);
+  esp8266.print(data);
+}
+
+void handleESP8266Communication() {
+  while (esp8266.available()) {
+    Serial.write(esp8266.read());
+  }
+  
+  while (Serial.available()) {
+    esp8266.write(Serial.read());
+  }
+}
+
+void sendCommand(String command) {
+  esp8266.flush();
+  while (esp8266.available()) {
+    esp8266.read();
+  }
+  esp8266.println(command);
+  delay(1000);
+  while (esp8266.available()) {
+    char c = esp8266.read();
+    if (c == '\r' || c == '\n') {
+      Serial.println();
+    } else {
+      Serial.write(c);
+    }
+  }
+  Serial.println();
+}
