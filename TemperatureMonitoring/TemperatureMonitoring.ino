@@ -5,31 +5,48 @@
 #define ONE_WIRE_BUS 13  // DS18B20 data wire er tilsluttet til digital pin 2
 #define ESP8266_RX 3
 #define ESP8266_TX 2
+#define ESP32_RX 0
+#define ESP32_RX 1
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 SoftwareSerial esp8266(ESP8266_RX, ESP8266_TX);
+SoftwareSerial espSerial(ESP32_RX, ESP32_RX);
 
-const char* SSID = "MeyerGerdesNet";
-const char* PASSWORD = "3jbyd4lsv3j172+2600";
-//const char* SSID = "Martins24";
-//const char* PASSWORD = "12345678";
+//const char* SSID = "MeyerGerdesNet";
+//const char* PASSWORD = "3jbyd4lsv3j172+2600";
+const char* SSID = "Martins24";
+const char* PASSWORD = "12345678";
 const char* API_KEY = "H3C2WB9XWVSR0BE8";
 
 void setup() {
   Serial.begin(115200);
   esp8266.begin(115200);
+  espSerial.begin(115200);
   sensors.begin();
   connectWiFi();
 }
 
 void loop() {
+  //communication with ESP32
+  if (Serial.available()) {
+    espSerial.write(Serial.read());
+  }
+  if (espSerial.available()) {
+    Serial.write(espSerial.read());
+  }
+
+  //read temperature
    float temp = getTemperature();
+
+  //send temperature to ESP8266
   if (sendToThingSpeak(temp)) {
     Serial.println("Data sent successfully");
   } else {
     Serial.println("Failed to send data");
   }
+
+  //ThingSpeak only allows one upload per 15 seconds
   delay(20000); 
 }
 
