@@ -13,10 +13,10 @@ DallasTemperature sensors(&oneWire);
 SoftwareSerial esp8266(ESP8266_RX, ESP8266_TX);
 SoftwareSerial espSerial(ESP32_RX, ESP32_RX);
 
-//const char* SSID = "MeyerGerdesNet";
-//const char* PASSWORD = "3jbyd4lsv3j172+2600";
-const char* SSID = "Martins24";
-const char* PASSWORD = "12345678";
+const char* SSID = "MeyerGerdesNet";
+const char* PASSWORD = "3jbyd4lsv3j172+2600";
+//const char* SSID = "Martins24";
+//const char* PASSWORD = "12345678";
 const char* API_KEY = "H3C2WB9XWVSR0BE8";
 
 void setup() {
